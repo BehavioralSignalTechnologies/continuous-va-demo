@@ -12,9 +12,10 @@ Two demos of the **continuous valence and arousal** outputs of the
 Both ask for **segment-level** results only: one value per segment (usually 2 s,
 sometimes shorter), available as soon as the segment ends, without waiting for an
 utterance to close. Each segment gets a value from −1 to 1 for valence (how
-positive the speaker sounds) and arousal (how activated). The values drawn are
+positive the speaker sounds) and arousal (how activated). The values are
 exactly the `continuous_valence` / `continuous_arousal` rows the API returns;
-nothing is recomputed locally.
+nothing is recomputed locally. The trail and the time panels show them as they
+are; the moving dot glides to each new value over about a second.
 
 ## Setup
 
@@ -68,9 +69,13 @@ uv run mic_live.py --simulate f.wav  # a file at real-time pace, no mic
 ```
 
 Same picture, in a live window; close it or press Ctrl-C to stop. The session
-is saved as `out/mic_<time>.wav` with its results (after the last values have
-arrived), so `uv run file_video.py out/mic_<time>.wav` turns it into an MP4
-without streaming again (`--no-save` to skip).
+is saved as `out/mic_<time>.wav` with its results, so
+`uv run file_video.py out/mic_<time>.wav` turns it into an MP4 without
+streaming again (`--no-save` to skip). If the stream failed or did not finish,
+only the recording is saved, and rendering it streams it again.
+
+Where no window can open (for example over SSH), pass `--seconds N` to run for
+N seconds without one.
 
 On macOS the terminal needs microphone permission (System Settings → Privacy &
 Security → Microphone). Without it, macOS hands over silence and no values come

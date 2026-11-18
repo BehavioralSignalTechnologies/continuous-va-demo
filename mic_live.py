@@ -22,6 +22,7 @@ import sys
 import json
 import time
 import wave
+import signal
 import argparse
 import threading
 from pathlib import Path
@@ -77,11 +78,16 @@ class FileAsMic:
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--device", type=lambda s: int(s) if s.isdigit() else s, default=None)
+    ap.add_argument(
+        "--device",
+        type=lambda s: int(s) if s.isdigit() else s,
+        default=None,
+        help="input device number or name (see --list)",
+    )
     ap.add_argument("--list", action="store_true", help="list audio devices and exit")
-    ap.add_argument("--trail", type=float, default=12.0)
-    ap.add_argument("--window", type=float, default=30.0)
-    ap.add_argument("--fps", type=int, default=20)
+    ap.add_argument("--trail", type=float, default=12.0, help="seconds of fading trail")
+    ap.add_argument("--window", type=float, default=30.0, help="seconds in the time panels")
+    ap.add_argument("--fps", type=int, default=20, help="window redraws per second")
     ap.add_argument(
         "--simulate",
         metavar="FILE",
@@ -91,12 +97,11 @@ def main():
         "--seconds",
         type=float,
         default=0,
-        help="stop after this many seconds (0 = until the window is closed)",
+        help="stop after this many seconds (0 = until the window is closed; "
+        "required where no window can open)",
     )
     ap.add_argument("--no-save", action="store_true", help="do not save wav + results")
     a = ap.parse_args()
-
-    from vademo.mic import Mic
 
     if a.list:
         import sounddevice as sd
@@ -104,8 +109,12 @@ def main():
         print(sd.query_devices())
         return
 
-    points, state = [], {"pid": None, "error": None}
-    mic = FileAsMic(a.simulate) if a.simulate else Mic(a.device)
+    headless = matplotlib.get_backend().lower() == "agg"
+    if headless and not a.seconds:
+        sys.exit("no window can open here (no display?): pass --seconds N to run without one")
+
+    points, state = [], {"pid": None, "error": None, "stop": False}
+    mic = FileAsMic(a.simulate) if a.simulate else open_mic(a.device)
     print(f"input: {mic.name()}", flush=True)
     plane = Plane(title=f"live microphone · {mic.name()}", trail=a.trail, window=a.window)
 
@@ -121,12 +130,18 @@ def main():
         except BaseException as e:  # noqa: BLE001 -- surfaced in the window and on exit
             state["error"] = e
 
+    # Ctrl-C asks the window to close, on every backend (Tk would otherwise
+    # swallow it and keep streaming); a second Ctrl-C cannot lose the session.
+    signal.signal(signal.SIGINT, lambda *_: state.update(stop=True))
+
     with mic:
         t0 = time.monotonic()
         th = threading.Thread(target=worker, daemon=True)
         th.start()
 
         def tick(_):
+            if state["stop"]:
+                plt.close(plane.fig)
             t = time.monotonic() - t0
             label = "● REC  " if mic.level > 0.01 else "○ REC  "
             state["peak"] = max(state.get("peak", 0.0), mic.level)
@@ -145,25 +160,21 @@ def main():
             plane.update(t, sorted(points, key=lambda p: p.et), label=label)
             return []
 
-        headless = matplotlib.get_backend().lower() == "agg"
         anim = (
             None
             if headless
             else FuncAnimation(plane.fig, tick, interval=1000 // a.fps, cache_frame_data=False)
         )
-        try:
-            if headless:  # timed run, no window
-                while time.monotonic() - t0 < (a.seconds or 10):
-                    time.sleep(1 / a.fps)
-                    tick(0)
-            else:
-                if a.seconds:
-                    timer = plane.fig.canvas.new_timer(interval=int(a.seconds * 1000))
-                    timer.add_callback(plt.close, plane.fig)
-                    timer.start()
-                plt.show()
-        except KeyboardInterrupt:
-            pass
+        if headless:  # timed run, no window
+            while time.monotonic() - t0 < a.seconds and not state["stop"]:
+                time.sleep(1 / a.fps)
+                tick(0)
+        else:
+            if a.seconds:
+                timer = plane.fig.canvas.new_timer(interval=int(a.seconds * 1000))
+                timer.add_callback(plt.close, plane.fig)
+                timer.start()
+            plt.show()
         duration = time.monotonic() - t0
     del anim
     # Closing the mic ends the upload; the server still owes the results for
@@ -176,24 +187,41 @@ def main():
     if state["error"]:
         print(f"stream error: {state['error']}")
     print(
-        f"pid {state['pid']}: {len(points)} values over {duration:.0f} s; dropped blocks {mic.dropped}"
+        f"pid {state['pid']}: {len(points)} values over {duration:.0f} s; "
+        f"dropped {mic.dropped * 0.25:.2f} s of audio"
     )
     if a.no_save or not mic.recorded:
         return
-    out = HERE / "out"
+    complete = not state["error"] and not th.is_alive()
+    save_session(HERE / "out", mic.recorded, state["pid"], points, complete)
+
+
+def open_mic(device):
+    from vademo.mic import Mic  # needs PortAudio, so only imported for a real mic
+
+    return Mic(device)
+
+
+def save_session(out: Path, recorded: list[bytes], pid, points, complete: bool) -> Path:
+    """Save the recording; save its results only if the stream ended cleanly, so a
+    partial session is never mistaken for a complete one."""
     out.mkdir(exist_ok=True)
-    stem = datetime.now().strftime("mic_%Y%m%d-%H%M%S")
-    pcm = b"".join(mic.recorded)
-    with wave.open(str(out / f"{stem}.wav"), "wb") as w:
+    wav = out / datetime.now().strftime("mic_%Y%m%d-%H%M%S.wav")
+    pcm = b"".join(recorded)
+    with wave.open(str(wav), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(SAMPLE_RATE)
         w.writeframes(pcm)
-    cache_path(out / f"{stem}.wav", out).write_text(
+    render = f"uv run file_video.py out/{wav.name}"
+    if not complete:
+        print(f"saved {wav}, without results (incomplete) -> {render} streams it again (billable)")
+        return wav
+    cache_path(wav, out).write_text(
         json.dumps(
             {
-                "source": str(out / f"{stem}.wav"),
-                "pid": state["pid"],
+                "source": str(wav),
+                "pid": pid,
                 "level": "segment",
                 "duration": len(pcm) / 2 / SAMPLE_RATE,
                 "points": [
@@ -203,10 +231,8 @@ def main():
             indent=1,
         )
     )
-    print(
-        f"saved {out / stem}.wav (+ its results) -> render with: "
-        f"uv run file_video.py out/{stem}.wav"
-    )
+    print(f"saved {wav} (+ its results) -> render with: {render}")
+    return wav
 
 
 if __name__ == "__main__":

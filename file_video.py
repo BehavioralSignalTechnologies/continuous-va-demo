@@ -29,7 +29,15 @@ import matplotlib
 
 matplotlib.use("Agg")
 
-from vademo.api import SAMPLE_RATE, Point, decode, stream, cache_path, pcm_blocks
+from vademo.api import (
+    SAMPLE_RATE,
+    Point,
+    decode,
+    stream,
+    cache_path,
+    pcm_blocks,
+    require_ffmpeg,
+)
 from vademo.plane import Plane
 
 
@@ -74,7 +82,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("input", help="audio or video file")
     ap.add_argument("-o", "--out", help="output mp4 (default out/<stem>_va.mp4)")
-    ap.add_argument("--fps", type=int, default=25)
+    ap.add_argument("--fps", type=int, default=25, help="video frames per second")
     ap.add_argument(
         "--latency",
         type=float,
@@ -86,7 +94,10 @@ def main():
     ap.add_argument("--restream", action="store_true", help="ignore the cached results")
     a = ap.parse_args()
 
+    require_ffmpeg()
     src = Path(a.input).expanduser().resolve()
+    if not src.is_file():
+        sys.exit(f"no such file: {src}")
     outdir = HERE / "out"
     outdir.mkdir(exist_ok=True)
     out = Path(a.out) if a.out else outdir / f"{src.stem}_va.mp4"
@@ -94,7 +105,10 @@ def main():
     nseg = sum(p.level == "segment" for p in points)
     print(f"pid {pid}: {nseg} segments")
     if not nseg:
-        sys.exit("no segments came back (no speech found by the API's VAD?)")
+        sys.exit(
+            "no segments came back (no speech found by the API's VAD?); "
+            "the empty result is cached, --restream streams again"
+        )
 
     plane = Plane(title=f"{src.name}  ·  pid {pid}", trail=a.trail, window=a.window)
     w, h = plane.fig.canvas.get_width_height()
@@ -136,13 +150,16 @@ def main():
         stdin=subprocess.PIPE,
     )
     n = int(duration * a.fps) + 1
-    for i in range(n):
-        plane.update(i / a.fps, points, latency=a.latency)
-        plane.fig.canvas.draw()
-        ff.stdin.write(plane.fig.canvas.buffer_rgba().tobytes())
-        if i % (a.fps * 10) == 0:
-            print(f"  render {i / a.fps:6.1f} / {duration:.1f} s", end="\r", flush=True)
-    ff.stdin.close()
+    try:
+        for i in range(n):
+            plane.update(i / a.fps, points, latency=a.latency)
+            plane.fig.canvas.draw()
+            ff.stdin.write(plane.fig.canvas.buffer_rgba().tobytes())
+            if i % (a.fps * 10) == 0:
+                print(f"  render {i / a.fps:6.1f} / {duration:.1f} s", end="\r", flush=True)
+        ff.stdin.close()
+    except BrokenPipeError:  # ffmpeg stopped early; its exit code is reported below
+        pass
     if ff.wait() != 0:
         sys.exit(f"\nffmpeg failed (exit code {ff.returncode}); {out} is not complete")
     print(f"\nwrote {out}")

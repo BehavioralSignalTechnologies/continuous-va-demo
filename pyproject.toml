@@ -32,3 +32,7 @@ build-backend = "setuptools.build_meta"
 # Only the library package. Without this, setuptools' auto-discovery sees
 # out/ (and any other folder) as a second top-level package and refuses to build.
 packages = ["vademo"]
+
+[tool.pytest.ini_options]
+# The demo scripts live at the repo root; let the tests import them.
+pythonpath = ["."]

@@ -3,6 +3,7 @@
 from types import SimpleNamespace
 from typing import ClassVar
 
+import pytest
 import behavioralsignals
 from behavioralsignals.models import StreamingResultResponse
 
@@ -24,12 +25,13 @@ class FakeClient:
     """Stands in for behavioralsignals.Client and returns fixed streaming responses."""
 
     responses: ClassVar[list] = []
+    options: ClassVar[list] = []
 
     def __init__(self):
         self.behavioral = SimpleNamespace(stream_audio=self.stream_audio)
 
     def stream_audio(self, audio_stream, options):
-        self.options = options
+        FakeClient.options.append(options)
         list(audio_stream)
         return iter(self.responses)
 
@@ -52,6 +54,34 @@ def test_stream_pairs_valence_and_arousal_per_segment(monkeypatch):
     points = list(api.stream(iter([b"\0\0"])))
 
     assert points == [(7, api.Point("segment", 0.0, 2.0, 0.25, -0.5))]
+
+
+def test_stream_asks_for_segment_level_continuous_values(monkeypatch):
+    FakeClient.responses, FakeClient.options = [], []
+    monkeypatch.setattr(behavioralsignals, "Client", FakeClient)
+
+    list(api.stream(iter([b"\0\0"])))
+
+    (opts,) = FakeClient.options
+    assert opts.sample_rate == api.SAMPLE_RATE == 16000
+    assert opts.encoding == "LINEAR_PCM"
+    assert opts.level == "segment"
+    assert opts.continuous == ["valence", "arousal"]
+
+
+def test_missing_credentials_end_with_a_message(monkeypatch):
+    monkeypatch.delenv("BEHAVIORALSIGNALS_CID", raising=False)
+    monkeypatch.delenv("BEHAVIORALSIGNALS_API_KEY", raising=False)
+
+    with pytest.raises(SystemExit, match="BEHAVIORALSIGNALS_CID"):
+        list(api.stream(iter([])))
+
+
+def test_missing_ffmpeg_ends_with_a_message(monkeypatch, tmp_path):
+    monkeypatch.setattr(api.shutil, "which", lambda _: None)
+
+    with pytest.raises(SystemExit, match="ffmpeg is not on the PATH"):
+        api.decode(tmp_path / "x.wav")
 
 
 def test_pcm_blocks_are_quarter_seconds():
