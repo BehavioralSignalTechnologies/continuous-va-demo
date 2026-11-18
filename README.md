@@ -116,7 +116,7 @@ uv run mic_live.py --simulate examples/sample.m4a  # play a file in real time, n
 - The dot shows the latest value and glides to each new one over about a
   second. The trail shows the last 12 s (`--trail`), the time panels the last
   30 s (`--window`).
-- A value appears when its segment ends. Live, that is about 0.3–0.5 s after a
+- A value appears when its segment ends. Live, that is about 0.3–0.4 s after a
   2 s segment and about 1.3 s after a shorter one.
 - The dot turns gray ("no speech") after 3 s without a segment. Silence gets no
   value.
