@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""(a) File -> MP4: stream an audio file through the Behavioral Signals streaming API
+"""File -> MP4: stream an audio file through the Behavioral Signals streaming API
 with continuous valence/arousal at SEGMENT level (one value per segment, usually 2 s),
 and render a video of the V/A plane whose sound track is the input file.
 
@@ -41,9 +41,6 @@ from vademo.api import (
 from vademo.plane import Plane
 
 
-HERE = Path(__file__).resolve().parent
-
-
 def get_points(src: Path, cache: Path, restream: bool):
     if cache.exists() and not restream:
         d = json.loads(cache.read_text())
@@ -62,7 +59,7 @@ def get_points(src: Path, cache: Path, restream: bool):
             f"  {p.level:9s} {p.st:6.1f}-{p.et:6.1f}s  V {p.valence:+.3f}  A {p.arousal:+.3f}",
             flush=True,
         )
-    points.sort(key=lambda p: (p.et, p.level != "segment"))
+    points.sort(key=lambda p: p.et)
     cache.write_text(
         json.dumps(
             {
@@ -93,12 +90,14 @@ def main():
     ap.add_argument("--window", type=float, default=30.0, help="seconds in the time panels")
     ap.add_argument("--restream", action="store_true", help="ignore the cached results")
     a = ap.parse_args()
+    if a.fps < 1:
+        ap.error("--fps must be 1 or more")
 
     require_ffmpeg()
     src = Path(a.input).expanduser().resolve()
     if not src.is_file():
         sys.exit(f"no such file: {src}")
-    outdir = HERE / "out"
+    outdir = Path("out")
     outdir.mkdir(exist_ok=True)
     out = Path(a.out) if a.out else outdir / f"{src.stem}_va.mp4"
     pid, duration, points = get_points(src, cache_path(src, outdir), a.restream)

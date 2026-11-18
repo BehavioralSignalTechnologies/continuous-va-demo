@@ -18,3 +18,17 @@ def test_help(script):
 
     assert out.returncode == 0, out.stderr
     assert "usage:" in out.stdout
+
+
+@pytest.mark.parametrize("args", [["file_video.py", "x.wav"], ["mic_live.py"]])
+def test_fps_zero_is_refused(args, tmp_path):
+    out = subprocess.run(
+        [sys.executable, str(ROOT / args[0]), *args[1:], "--fps", "0"],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=tmp_path,
+    )
+
+    assert out.returncode == 2, out.stderr
+    assert "--fps must be 1 or more" in out.stderr

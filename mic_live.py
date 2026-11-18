@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""(b) Live microphone: stream the mic through the Behavioral Signals streaming API
+"""Live microphone: stream the mic through the Behavioral Signals streaming API
 with continuous valence/arousal and draw the same V/A plane as the video demo.
 
     uv run mic_live.py                 # default input device
@@ -40,9 +40,6 @@ from matplotlib.animation import FuncAnimation
 
 from vademo.api import BLOCK_BYTES, SAMPLE_RATE, decode, stream, cache_path
 from vademo.plane import Plane
-
-
-HERE = Path(__file__).resolve().parent
 
 
 class FileAsMic:
@@ -102,6 +99,8 @@ def main():
     )
     ap.add_argument("--no-save", action="store_true", help="do not save wav + results")
     a = ap.parse_args()
+    if a.fps < 1:
+        ap.error("--fps must be 1 or more")
 
     if a.list:
         import sounddevice as sd
@@ -197,7 +196,7 @@ def main():
     if a.no_save or not mic.recorded:
         return
     complete = not state["error"] and not th.is_alive()
-    save_session(HERE / "out", mic.recorded, state["pid"], points, complete)
+    save_session(Path("out"), mic.recorded, state["pid"], points, complete)
 
 
 def open_mic(device):
@@ -228,9 +227,7 @@ def save_session(out: Path, recorded: list[bytes], pid, points, complete: bool) 
                 "pid": pid,
                 "level": "segment",
                 "duration": len(pcm) / 2 / SAMPLE_RATE,
-                "points": [
-                    p.as_dict() for p in sorted(points, key=lambda p: (p.et, p.level != "segment"))
-                ],
+                "points": [p.as_dict() for p in sorted(points, key=lambda p: p.et)],
             },
             indent=1,
         )

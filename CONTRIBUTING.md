@@ -16,7 +16,7 @@ To report a security problem, follow [SECURITY.md](SECURITY.md) instead.
 
 ## Set up
 
-Follow [Setup](README.md#setup) in the README, then install the dev tools:
+Follow [Install](README.md#install) in the README, then install the dev tools:
 
 ```bash
 uv sync --extra dev

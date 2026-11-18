@@ -21,7 +21,7 @@ BLOCK_BYTES = SAMPLE_RATE // 4 * 2  # 0.25 s of int16 mono
 
 @dataclass
 class Point:
-    level: str  # "segment" or "utterance"
+    level: str  # always "segment": the only level the demos ask for
     st: float
     et: float
     valence: float
@@ -40,7 +40,7 @@ def cache_path(src: str | Path, outdir: Path) -> Path:
 
 def require_ffmpeg():
     if shutil.which("ffmpeg") is None:
-        raise SystemExit("ffmpeg is not on the PATH: install it (see Setup in the README)")
+        raise SystemExit("ffmpeg is not on the PATH: install it (see Install in the README)")
 
 
 def decode(path: str | Path) -> bytes:
@@ -80,7 +80,7 @@ def pcm_blocks(pcm: bytes):
         yield pcm[i : i + BLOCK_BYTES]
 
 
-def stream(blocks, level: str = "segment"):
+def stream(blocks):
     """Yield (pid, Point) for every unit that carries both continuous values.
 
     Credentials come from BEHAVIORALSIGNALS_CID / BEHAVIORALSIGNALS_API_KEY, read by the SDK.
@@ -93,7 +93,7 @@ def stream(blocks, level: str = "segment"):
     opts = StreamingOptions(
         sample_rate=SAMPLE_RATE,
         encoding="LINEAR_PCM",
-        level=level,
+        level="segment",
         continuous=["valence", "arousal"],
     )
     try:
@@ -114,7 +114,7 @@ def make_client():
     try:
         return Client()  # signs in at once
     except ValueError as e:  # no CID or API key set
-        raise SystemExit(f"{e} (see Setup in the README)") from None
+        raise SystemExit(f"{e} (see Install in the README)") from None
     except BehavioralSignalsError as e:  # rejected, e.g. a wrong API key
         raise SystemExit(f"cannot sign in: {e}") from None
 
