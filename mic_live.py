@@ -111,7 +111,11 @@ def main():
 
     headless = matplotlib.get_backend().lower() == "agg"
     if headless and not a.seconds:
-        sys.exit("no window can open here (no display?): pass --seconds N to run without one")
+        sys.exit(
+            "no window can open here: no display, or this Python has no tkinter "
+            "(Ubuntu/Debian: sudo apt install python3-tk). "
+            "To run without a window, pass --seconds N"
+        )
 
     points, state = [], {"pid": None, "error": None, "stop": False}
     mic = FileAsMic(a.simulate) if a.simulate else open_mic(a.device)
