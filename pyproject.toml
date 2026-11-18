@@ -1,0 +1,34 @@
+[project]
+name = "continuous-va-demo"
+version = "0.1.0"
+description = "Continuous valence/arousal demos on the Behavioral Signals streaming API: file -> MP4, and live microphone."
+readme = "README.md"
+authors = [{ name = "Behavioral Signal Technologies" }]
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+dependencies = [
+    "behavioralsignals>=1.1.0,<2",
+    "matplotlib>=3.8",
+    "numpy>=1.26",
+    "sounddevice>=0.4.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff==0.16.8",
+]
+
+[project.urls]
+Homepage = "https://behavioralsignals.com/"
+Documentation = "https://behavioralsignals.readme.io/"
+Repository = "https://github.com/BehavioralSignalTechnologies/continuous-va-demo"
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# Only the library package. Without this, setuptools' auto-discovery sees
+# out/ (and any other folder) as a second top-level package and refuses to build.
+packages = ["vademo"]
