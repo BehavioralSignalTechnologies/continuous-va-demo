@@ -63,16 +63,15 @@ $env:BEHAVIORALSIGNALS_API_KEY = "your_api_key"
 
 ## File → video
 
-Try it with our 48 s sample (two short calls, an angry one and then a happy
-one). On Windows, type `curl.exe` instead of `curl`.
+Try it with the 48 s sample in `examples/` (two short calls, an angry one and
+then a happy one):
 
 ```bash
-curl -LO https://github.com/BehavioralSignalTechnologies/pipecat-behavioralsignals/releases/download/v0.2.0/pipecat-behavioralsignals-demo.mp4
-uv run file_video.py pipecat-behavioralsignals-demo.mp4
+uv run file_video.py examples/sample.m4a
 ```
 
-It prints each value as it arrives and writes
-`out/pipecat-behavioralsignals-demo_va.mp4`. The picture above is a frame of it.
+It prints each value as it arrives and writes `out/sample_va.mp4`. The picture
+above is a frame of it.
 
 Any speech file works (wav, mp3, mp4, ...):
 
@@ -91,10 +90,10 @@ uv run file_video.py call.mp3 --latency 0.5        # show values with the live d
 ## Live microphone
 
 ```bash
-uv run mic_live.py                    # default microphone
-uv run mic_live.py --list             # list audio devices
-uv run mic_live.py --device 4         # use device 4 from the list
-uv run mic_live.py --simulate f.wav   # play a file at real-time pace, no microphone
+uv run mic_live.py                                 # default microphone
+uv run mic_live.py --list                          # list audio devices
+uv run mic_live.py --device 4                      # use device 4 from the list
+uv run mic_live.py --simulate examples/sample.m4a  # play a file in real time, no microphone
 ```
 
 - To stop, close the window or press Ctrl-C.
